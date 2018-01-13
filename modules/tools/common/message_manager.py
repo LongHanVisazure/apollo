@@ -23,6 +23,9 @@ from modules.planning.proto import planning_internal_pb2
 from modules.planning.proto import planning_pb2
 from modules.prediction.proto import prediction_obstacle_pb2
 from modules.routing.proto import routing_pb2
+from modules.control.proto import control_cmd_pb2
+from modules.canbus.proto import chassis_pb2
+from modules.common.proto import drive_event_pb2
 
 import proto_utils
 
@@ -56,6 +59,8 @@ class MessageType:
 
 topic_pb_list = [
     MessageType("planning", "/apollo/planning", planning_pb2.ADCTrajectory),
+    MessageType("control", "/apollo/control", control_cmd_pb2.ControlCommand),
+    MessageType("chassis", "/apollo/canbus/chassis", chassis_pb2.Chassis),
     MessageType("prediction", "/apollo/prediction",
                 prediction_obstacle_pb2.PredictionObstacles),
     MessageType("perception", "/apollo/perception",
@@ -67,7 +72,9 @@ topic_pb_list = [
     MessageType("localization", "/apollo/localization/pose",
                 localization_pb2.LocalizationEstimate),
     MessageType("traffic_light", "/apollo/perception/traffic_light",
-                traffic_light_detection_pb2.TrafficLightDetection)
+                traffic_light_detection_pb2.TrafficLightDetection),
+    MessageType("drive_event", "/apollo/drive_event",
+                drive_event_pb2.DriveEvent),
 ]
 
 
@@ -103,7 +110,7 @@ class PbMessageManager:
             print("topic %s is not registered in topic_pb_list" % topic)
             return None
         meta_msg = self.__topic_dict[topic]
-        return meta_msg.parse(filename)
+        return meta_msg.parse_file(filename)
 
     def parse_file(self, filename):
         """parse a file by guessing topic type"""

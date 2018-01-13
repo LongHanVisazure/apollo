@@ -45,13 +45,12 @@ cc_library(
         "//modules/common",
         "//modules/common:apollo_app",
         "//modules/common/adapters:adapter_manager",
-        "//modules/common/monitor",
+        "//modules/common/monitor_log",
         "//modules/drivers/canbus:sensor_gflags",
         "//modules/drivers/canbus/can_client:can_client_factory",
         "//modules/drivers/canbus/can_comm:can_receiver",
         "//modules/drivers/canbus/can_comm:message_manager_base",
         "//modules/drivers/conti_radar/protocol:drivers_conti_radar_protocol",
-        "//modules/hmi/utils:hmi_status_helper",
     ],
 )
 
@@ -74,7 +73,7 @@ cc_binary(
         ":conti_radar_canbus_lib",
         "//external:gflags",
         "//modules/common:log",
-        "//modules/common/monitor",
+        "//modules/common/monitor_log",
         "//modules/drivers/canbus/common:canbus_common",
         "@ros//:ros_common",
     ],

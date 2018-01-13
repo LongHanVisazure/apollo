@@ -24,6 +24,7 @@ import rospy
 import std_msgs
 import argparse
 import shutil
+import StringIO
 import os
 import sys
 
@@ -40,9 +41,12 @@ def stat_planning(planning_msg):
         return stats
     stats["total_time"] = planning_msg.latency_stats.total_time_ms
     stats["init_time"] = planning_msg.latency_stats.init_frame_time_ms
+    used_time = stats["init_time"]
     stats["obstacles"] = len(planning_msg.decision.object_decision.decision)
     for task in planning_msg.latency_stats.task_stats:
         stats[task.name] = task.time_ms
+        used_time += task.time_ms
+    stats["other"] = stats["total_time"] - used_time
     return stats
 
 
@@ -56,15 +60,28 @@ def print_stat(msg, fhandle):
     keywords = [
         'obstacles', 'total_time', 'init_time', u'TrafficDecider',
         u'DpPolyPathOptimizer', u'PathDecider', u'DpStSpeedOptimizer',
-        u'SpeedDecider', u'QpSplinePathOptimizer', u'QpSplineStSpeedOptimizer'
+        u'SpeedDecider', u'QpSplinePathOptimizer', u'QpSplineStSpeedOptimizer',
+        u'ReferenceLineProvider', u'other'
     ]
 
+    output = StringIO.StringIO()
+    valid = True
     if g_first_time:
         g_first_time = False
-        fhandle.write("\t".join(keywords) + "\n")
+        output.write("\t".join(keywords) + "\n")
     for key in keywords:
-        fhandle.write(str(msg[key]) + "\t")
-    fhandle.write("\n")
+        if key not in msg:
+            valid = False
+            break
+        if key == "obstacles":
+            output.write("%d\t" % msg[key])
+        else:
+            output.write("%.3f\t" % msg[key])
+    if valid:
+        output.write("\n")
+        fhandle.write(output.getvalue())
+        fhandle.flush()
+    output.close()
 
 
 def on_receive_planning(planning_msg):

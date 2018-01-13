@@ -32,7 +32,7 @@
 #include "modules/common/adapters/proto/adapter_config.pb.h"
 #include "modules/common/apollo_app.h"
 #include "modules/common/macro.h"
-#include "modules/common/monitor/monitor.h"
+#include "modules/common/monitor_log/monitor_log_buffer.h"
 #include "modules/common/time/time.h"
 #include "modules/common/util/util.h"
 #include "modules/control/proto/control_cmd.pb.h"
@@ -47,7 +47,6 @@
 #include "modules/drivers/conti_radar/conti_radar_message_manager.h"
 #include "modules/drivers/conti_radar/protocol/radar_config_200.h"
 #include "modules/drivers/proto/conti_radar.pb.h"
-#include "modules/hmi/utils/hmi_status_helper.h"
 
 /**
  * @namespace apollo::drivers
@@ -80,7 +79,7 @@ class ContiRadarCanbus : public apollo::common::ApolloApp {
   // TODO(lizh): check whether we need a new msg item, say
   // MonitorMessageItem::SENSORCANBUS
   ContiRadarCanbus()
-      : monitor_(apollo::common::monitor::MonitorMessageItem::CANBUS) {}
+      : monitor_logger_(apollo::common::monitor::MonitorMessageItem::CANBUS) {}
 
   /**
   * @brief obtain module name
@@ -117,7 +116,7 @@ class ContiRadarCanbus : public apollo::common::ApolloApp {
   std::unique_ptr<ContiRadarMessageManager> sensor_message_manager_;
 
   int64_t last_timestamp_ = 0;
-  apollo::common::monitor::Monitor monitor_;
+  apollo::common::monitor::MonitorLogger monitor_logger_;
 };
 
 }  // namespace conti_radar

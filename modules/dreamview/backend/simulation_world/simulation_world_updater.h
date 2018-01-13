@@ -89,6 +89,8 @@ class SimulationWorldUpdater {
       const nlohmann::json &json,
       apollo::routing::RoutingRequest *routing_request);
 
+  bool ValidateCoordinate(const nlohmann::json &json);
+
   /**
    * @brief Tries to load the points of interest from the file if it has
    * not been.
@@ -133,6 +135,8 @@ class SimulationWorldUpdater {
   // Mutex to protect concurrent access to simulation_world_json_.
   // NOTE: Use boost until we have std version of rwlock support.
   boost::shared_mutex mutex_;
+
+  bool enable_pnc_monitor_ = false;
 };
 
 }  // namespace dreamview

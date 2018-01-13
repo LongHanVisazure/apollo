@@ -49,11 +49,16 @@ class HMI {
 
   // Run a supported command of current mode.
   void RunModeCommand(const std::string &command_name);
+  // Run a supported command of the given mode.
+  void RunModeCommand(const std::string &mode, const std::string &command_name);
 
   static void ChangeDrivingModeTo(const std::string &new_mode);
   void ChangeMapTo(const std::string &map_name);
   void ChangeVehicleTo(const std::string &vehicle_name);
   void ChangeModeTo(const std::string &mode_name);
+
+  // Check if there is available updates.
+  void CheckOTAUpdates();
 
   HMIConfig config_;
   HMIStatus status_;

@@ -92,7 +92,7 @@ module.exports = {
                 // first, and then file-loader.
                 //
                 // Now you can import images just like js.
-                test: /\.(png|jpe?g|svg|mp4|mov)$/i,
+                test: /\.(png|jpe?g|svg|mp4|mov|gif)$/i,
                 use: [
                     {
                         loader: "file-loader",
@@ -164,8 +164,18 @@ module.exports = {
                 from: 'components/Navigation/navigation_viewer.html',
                 to:  'components/Navigation/navigation_viewer.html',
                 toType: 'file',
-            },
+            }, {
+                from: '../node_modules/three/examples/fonts',
+                to: 'fonts',
+            }
         ]),
+        // As of moment 2.18, all locales are bundled together with the core library
+        // use the IgnorePlugin to stop any locale being bundled with moment:
+        new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/),
+
+        new webpack.DefinePlugin({
+            OFFLINE_PLAYBACK: JSON.stringify(false),
+        }),
     ],
 
     devServer: {

@@ -24,7 +24,8 @@
 
 namespace apollo {
 namespace hdmap {
-DEFINE_string(test_map_file, "modules/map/data/sunnyvale_loop/base_map.xml",
+DEFINE_string(test_map_file,
+              "modules/map/data/sunnyvale_loop/base_map_test.bin",
               "The test map file");
 DEFINE_string(
     test_routing_file,
@@ -49,24 +50,24 @@ hdmap::HDMap RouteSegmentsTest::hdmap_;
 TEST_F(RouteSegmentsTest, GetProjection) {
   auto lane1 = hdmap_.GetLaneById(hdmap::MakeMapId("9_1_-1"));
   RouteSegments route_segments;
-  route_segments.emplace_back(lane1, 10, 20);
+  route_segments.emplace_back(lane1, 5, 10);
   LaneWaypoint waypoint;
-  auto point = lane1->GetSmoothPoint(5);
+  auto point = lane1->GetSmoothPoint(3);
   common::SLPoint sl;
   EXPECT_FALSE(route_segments.GetProjection(point, &sl, &waypoint));
-  point = lane1->GetSmoothPoint(10);
+  point = lane1->GetSmoothPoint(5);
   EXPECT_TRUE(route_segments.GetProjection(point, &sl, &waypoint));
   EXPECT_EQ(lane1, waypoint.lane);
-  EXPECT_NEAR(10.0, waypoint.s, 1e-4);
+  EXPECT_NEAR(5.0, waypoint.s, 1e-4);
   EXPECT_NEAR(0.0, sl.s(), 1e-4);
   EXPECT_NEAR(0.0, sl.l(), 1e-4);
-  point = lane1->GetSmoothPoint(15);
+  point = lane1->GetSmoothPoint(8);
   EXPECT_TRUE(route_segments.GetProjection(point, &sl, &waypoint));
   EXPECT_EQ(lane1, waypoint.lane);
-  EXPECT_NEAR(15.0, waypoint.s, 1e-4);
-  EXPECT_NEAR(5.0, sl.s(), 1e-4);
+  EXPECT_NEAR(8.0, waypoint.s, 1e-4);
+  EXPECT_NEAR(3.0, sl.s(), 1e-4);
   EXPECT_NEAR(0.0, sl.l(), 1e-4);
-  point = lane1->GetSmoothPoint(25);
+  point = lane1->GetSmoothPoint(15);
   EXPECT_FALSE(route_segments.GetProjection(point, &sl, &waypoint));
   auto lane2 = hdmap_.GetLaneById(hdmap::MakeMapId("13_1_-1"));
   route_segments.emplace_back(lane2, 20, 30);
@@ -77,7 +78,7 @@ TEST_F(RouteSegmentsTest, GetProjection) {
   EXPECT_TRUE(route_segments.GetProjection(point, &sl, &waypoint));
   EXPECT_EQ(lane2, waypoint.lane);
   EXPECT_NEAR(25.0, waypoint.s, 1e-4);
-  EXPECT_NEAR(15.0, sl.s(), 1e-4);
+  EXPECT_NEAR(10.0, sl.s(), 1e-4);
   EXPECT_NEAR(0.0, sl.l(), 1e-4);
   point = lane2->GetSmoothPoint(31);
   EXPECT_FALSE(route_segments.GetProjection(point, &sl, &waypoint));

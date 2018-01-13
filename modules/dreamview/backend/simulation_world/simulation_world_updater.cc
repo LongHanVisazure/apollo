@@ -16,7 +16,7 @@
 
 #include "modules/dreamview/backend/simulation_world/simulation_world_updater.h"
 
-#include "google/protobuf/util/json_util.h"
+#include "modules/common/util/json_util.h"
 #include "modules/common/util/map_util.h"
 #include "modules/dreamview/backend/common/dreamview_gflags.h"
 #include "modules/map/hdmap/hdmap_util.h"
@@ -26,11 +26,11 @@ namespace dreamview {
 
 using apollo::common::adapter::AdapterManager;
 using apollo::common::monitor::MonitorMessageItem;
-using apollo::common::util::GetProtoFromASCIIFile;
 using apollo::common::util::ContainsKey;
+using apollo::common::util::GetProtoFromASCIIFile;
+using apollo::common::util::JsonUtil;
 using apollo::hdmap::EndWayPointFile;
 using apollo::routing::RoutingRequest;
-using google::protobuf::util::MessageToJsonString;
 using Json = nlohmann::json;
 
 SimulationWorldUpdater::SimulationWorldUpdater(WebSocketHandler *websocket,
@@ -49,15 +49,8 @@ SimulationWorldUpdater::SimulationWorldUpdater(WebSocketHandler *websocket,
         if (iter != json.end()) {
           MapElementIds map_element_ids(*iter);
           auto retrieved = map_service_->RetrieveMapElements(map_element_ids);
-
-          std::string retrieved_json_string;
-          MessageToJsonString(retrieved, &retrieved_json_string);
-
-          Json response;
-          response["type"] = "MapData";
-          response["data"] = Json::parse(retrieved_json_string);
-
-          websocket_->SendData(conn, response.dump());
+          websocket_->SendData(
+              conn, JsonUtil::ProtoToTypedJson("MapData", retrieved).dump());
         }
       });
 
@@ -67,6 +60,12 @@ SimulationWorldUpdater::SimulationWorldUpdater(WebSocketHandler *websocket,
         auto radius = json.find("radius");
         if (radius == json.end()) {
           AERROR << "Cannot retrieve map elements with unknown radius.";
+          return;
+        }
+
+        if (!radius->is_number()) {
+          AERROR << "Expect radius with type 'number', but was "
+                 << radius->type_name();
           return;
         }
 
@@ -106,18 +105,22 @@ SimulationWorldUpdater::SimulationWorldUpdater(WebSocketHandler *websocket,
           return;
         }
 
-        bool requestPlanning = false;
-        if (json.find("planning") != json.end()) {
-          requestPlanning = json["planning"];
+        auto planning = json.find("planning");
+        if (planning != json.end() && planning->is_boolean()) {
+          enable_pnc_monitor_ = json["planning"];
         }
-
         std::string to_send;
         {
           // Pay the price to copy the data instead of sending data over the
           // wire while holding the lock.
           boost::shared_lock<boost::shared_mutex> reader_lock(mutex_);
-          to_send = requestPlanning ? simulation_world_with_planning_json_
-                                    : simulation_world_json_;
+          to_send = enable_pnc_monitor_ ? simulation_world_with_planning_json_
+                                        : simulation_world_json_;
+        }
+        if (FLAGS_enable_update_size_check && !enable_pnc_monitor_ &&
+            to_send.size() > FLAGS_max_update_size) {
+          AWARN << "update size is too big:" << to_send.size();
+          return;
         }
         websocket_->SendData(conn, to_send, true);
       });
@@ -133,8 +136,14 @@ SimulationWorldUpdater::SimulationWorldUpdater(WebSocketHandler *websocket,
           for (const auto &landmark : poi_.landmark()) {
             Json place;
             place["name"] = landmark.name();
-            place["x"] = landmark.waypoint().pose().x();
-            place["y"] = landmark.waypoint().pose().y();
+            Json waypoint_list;
+            for (const auto &waypoint : landmark.waypoint()) {
+              Json point;
+              point["x"] = waypoint.pose().x();
+              point["y"] = waypoint.pose().y();
+              waypoint_list.push_back(point);
+            }
+            place["waypoint"] = waypoint_list;
             poi_list.push_back(place);
           }
         } else {
@@ -164,30 +173,33 @@ SimulationWorldUpdater::SimulationWorldUpdater(WebSocketHandler *websocket,
 
 bool SimulationWorldUpdater::ConstructRoutingRequest(
     const Json &json, RoutingRequest *routing_request) {
-  // Input validations
+  routing_request->clear_waypoint();
+  // set start point
   if (!ContainsKey(json, "start")) {
-    AERROR << "Cannot prepare a routing request: input validation failed.";
+    AERROR << "Failed to prepare a routing request: start point not found.";
     return false;
   }
 
-  // set start point
   auto start = json["start"];
-  if (!ContainsKey(start, "x") || !ContainsKey(start, "y")) {
-    AERROR << "Failed to prepare a routing request: start point not found";
+  if (!ValidateCoordinate(start)) {
+    AERROR << "Failed to prepare a routing request: invalid start point.";
     return false;
   }
-  routing_request->clear_waypoint();
-  map_service_->ConstructLaneWayPoint(start["x"], start["y"],
-                                      routing_request->add_waypoint());
+  if (!map_service_->ConstructLaneWayPoint(start["x"], start["y"],
+                                           routing_request->add_waypoint())) {
+    AERROR << "Failed to prepare a routing request:"
+           << " cannot locate start point on map.";
+    return false;
+  }
 
   // set way point(s) if any
   auto iter = json.find("waypoint");
-  if (iter != json.end()) {
+  if (iter != json.end() && iter->is_array()) {
     auto *waypoint = routing_request->mutable_waypoint();
     for (size_t i = 0; i < iter->size(); ++i) {
       auto &point = (*iter)[i];
-      if (!ContainsKey(point, "x") || !ContainsKey(point, "y")) {
-        AERROR << "Failed to prepare a routing request: waypoint not found";
+      if (!ValidateCoordinate(point)) {
+        AERROR << "Failed to prepare a routing request: invalid waypoint.";
         return false;
       }
 
@@ -199,23 +211,39 @@ bool SimulationWorldUpdater::ConstructRoutingRequest(
   }
 
   // set end point
-  auto *end_point = routing_request->add_waypoint();
   if (!ContainsKey(json, "end")) {
-    AERROR << "Failed to prepare a routing request: end point not found";
+    AERROR << "Failed to prepare a routing request: end point not found.";
     return false;
   }
 
   auto end = json["end"];
-  if (!ContainsKey(end, "x") || !ContainsKey(end, "y")) {
-    AERROR << "Failed to prepare a routing request: end point not found";
+  if (!ValidateCoordinate(end)) {
+    AERROR << "Failed to prepare a routing request: invalid end point.";
     return false;
   }
-  map_service_->ConstructLaneWayPoint(end["x"], end["y"], end_point);
+  if (!map_service_->ConstructLaneWayPoint(end["x"], end["y"],
+                                           routing_request->add_waypoint())) {
+    AERROR << "Failed to prepare a routing request:"
+           << " cannot locate end point on map.";
+    return false;
+  }
 
   AINFO << "Constructed RoutingRequest to be sent:\n"
         << routing_request->DebugString();
 
   return true;
+}
+
+bool SimulationWorldUpdater::ValidateCoordinate(const nlohmann::json &json) {
+  if (!ContainsKey(json, "x") || !ContainsKey(json, "y")) {
+    AERROR << "Failed to find x or y coordinate.";
+    return false;
+  }
+  if (json.find("x")->is_number() && json.find("y")->is_number()) {
+    return true;
+  }
+  AERROR << "Both x and y coordinate should be a number.";
+  return false;
 }
 
 void SimulationWorldUpdater::Start() {
@@ -234,8 +262,10 @@ void SimulationWorldUpdater::OnTimer(const ros::TimerEvent &event) {
         sim_world_service_.GetUpdateAsJson(FLAGS_sim_map_radius);
     simulation_world_json_ = simulation_world.dump();
 
-    simulation_world["planningData"] = sim_world_service_.GetPlanningData();
-    simulation_world_with_planning_json_ = simulation_world.dump();
+    if (enable_pnc_monitor_) {
+      simulation_world["planningData"] = sim_world_service_.GetPlanningData();
+      simulation_world_with_planning_json_ = simulation_world.dump();
+    }
   }
 }
 

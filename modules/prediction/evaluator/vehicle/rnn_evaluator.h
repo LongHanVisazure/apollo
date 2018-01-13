@@ -21,14 +21,13 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <mutex>
 
 #include "Eigen/Dense"
 
 #include "modules/prediction/container/obstacles/obstacle.h"
 #include "modules/prediction/evaluator/evaluator.h"
-#include "modules/prediction/proto/network_model.pb.h"
 #include "modules/prediction/network/rnn_model/rnn_model.h"
+#include "modules/prediction/proto/network_model.pb.h"
 
 namespace apollo {
 namespace prediction {
@@ -84,10 +83,10 @@ class RNNEvaluator : public Evaluator {
                         const std::string& prev_lane_id);
 
  private:
+  static const int DIM_OBSTACLE_FEATURE = 6;
+  static const int DIM_LANE_POINT_FEATURE = 4;
+  static const int LENGTH_LANE_POINT_SEQUENCE = 20;
   network::RnnModel* model_ptr_;
-  int dim_obstacle_feature_ = 6;
-  int dim_lane_point_feature_ = 4;
-  int length_lane_point_sequence_ = 20;
 };
 
 }  // namespace prediction

@@ -29,7 +29,7 @@ function start() {
     LARGEST_DISK="$(df | grep "/media/${DOCKER_USER}" | sort -nr -k 4 | \
         awk '{print substr($0, index($0, $6))}')"
     if [ ! -z "${LARGEST_DISK}" ]; then
-      REAL_BAG_DIR="/media/${DOCKER_USER}/${LARGEST_DISK}/data/bag"
+      REAL_BAG_DIR="${LARGEST_DISK}/data/bag"
       if [ ! -d "${REAL_BAG_DIR}" ]; then
         mkdir -p "${REAL_BAG_DIR}"
       fi
@@ -39,14 +39,13 @@ function start() {
     else
       echo "Cannot find portable disk."
       echo "Please make sure your container was started AFTER inserting the disk."
-      exit 1
     fi
   fi
 
   # Create and enter into bag dir.
-  if [ ! -e "${BAG_DIR}" ]; then
-    mkdir -p "${BAG_DIR}"
-  fi
+  TASK_ID=$(date +%Y-%m-%d-%H-%M-%S)
+  BAG_DIR="${BAG_DIR}/${TASK_ID}"
+  mkdir -p "${BAG_DIR}"
   cd "${BAG_DIR}"
   echo "Recording bag to: $(pwd)"
 
@@ -54,13 +53,18 @@ function start() {
   LOG="/tmp/apollo_record.out"
   NUM_PROCESSES="$(pgrep -c -f "rosbag record")"
   if [ "${NUM_PROCESSES}" -eq 0 ]; then
-    nohup rosbag record -b 2048  \
-        /apollo/sensor/gnss/gnss_status \
-        /apollo/sensor/gnss/odometry \
-        /apollo/sensor/gnss/ins_stat \
-        /apollo/sensor/gnss/corrected_imu \
-        /apollo/sensor/mobileye \
+    nohup rosbag record --split --duration=1m -b 2048  \
+        /apollo/sensor/conti_radar \
         /apollo/sensor/delphi_esr \
+        /apollo/sensor/gnss/best_pose \
+        /apollo/sensor/gnss/corrected_imu \
+        /apollo/sensor/gnss/gnss_status \
+        /apollo/sensor/gnss/imu \
+        /apollo/sensor/gnss/ins_stat \
+        /apollo/sensor/gnss/odometry \
+        /apollo/sensor/gnss/rtk_eph \
+        /apollo/sensor/gnss/rtk_obs \
+        /apollo/sensor/mobileye \
         /apollo/canbus/chassis \
         /apollo/canbus/chassis_detail \
         /apollo/control \
@@ -72,12 +76,20 @@ function start() {
         /apollo/routing_request \
         /apollo/routing_response \
         /apollo/localization/pose \
-        /apollo/monitor </dev/null >"${LOG}" 2>&1 &
+        /apollo/localization/msf_gnss \
+        /apollo/localization/msf_lidar \
+        /apollo/localization/msf_status \
+        /apollo/drive_event \
+        /tf \
+        /tf_static \
+        /apollo/monitor \
+        /apollo/monitor/system_status \
+        /apollo/monitor/static_info </dev/null >"${LOG}" 2>&1 &
     fi
 }
 
 function stop() {
-  pkill -SIGINT -f rosbag
+  pkill -SIGINT -f record
 }
 
 function help() {

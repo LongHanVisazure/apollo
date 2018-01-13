@@ -61,11 +61,11 @@ cc_library(
     ],
     deps = [
         ":indexed_list",
+        ":planning_gflags",
         "//modules/common/math:box2d",
         "//modules/common/math:polygon2d",
         "//modules/common/util",
         "//modules/perception/proto:perception_proto",
-        "//modules/planning/common:planning_gflags",
         "//modules/planning/common:planning_util",
         "//modules/planning/proto:planning_proto",
         "//modules/prediction/proto:prediction_proto",
@@ -176,27 +176,58 @@ cc_library(
 cc_library(
     name = "reference_line_info",
     srcs = [
-        "decider.cc",
         "reference_line_info.cc",
     ],
     hdrs = [
-        "decider.h",
         "reference_line_info.h",
     ],
     deps = [
         ":path_decision",
+        ":planning_gflags",
         "//modules/common:log",
         "//modules/common/proto:pnc_point_proto",
+        "//modules/common/util:dropbox",
         "//modules/common/vehicle_state:vehicle_state_provider",
         "//modules/map/pnc_map",
         "//modules/map/proto:map_proto",
-        "//modules/planning/common:planning_gflags",
         "//modules/planning/common/path:path_data",
         "//modules/planning/common/speed:speed_data",
         "//modules/planning/common/trajectory:discretized_trajectory",
         "//modules/planning/common/trajectory:publishable_trajectory",
         "//modules/planning/reference_line",
         "@eigen//:eigen",
+    ],
+)
+
+cc_library(
+    name = "lag_prediction",
+    srcs = [
+        "lag_prediction.cc",
+    ],
+    hdrs = [
+        "lag_prediction.h",
+    ],
+    deps = [
+        ":planning_gflags",
+        "//modules/common/adapters:adapter_manager",
+        "//modules/prediction/proto:prediction_proto",
+    ],
+)
+
+cc_library(
+    name = "change_lane_decider",
+    srcs = [
+        "change_lane_decider.cc",
+    ],
+    hdrs = [
+        "change_lane_decider.h",
+    ],
+    deps = [
+        ":planning_gflags",
+        ":reference_line_info",
+        "//modules/common/util:dropbox",
+        "//modules/map/pnc_map:route_segments",
+        "//modules/planning/proto:planning_proto",
     ],
 )
 
@@ -209,7 +240,9 @@ cc_library(
         "frame.h",
     ],
     deps = [
+        ":change_lane_decider",
         ":indexed_queue",
+        ":lag_prediction",
         ":obstacle",
         ":reference_line_info",
         "//modules/common:log",
@@ -220,8 +253,26 @@ cc_library(
         "//modules/map/pnc_map",
         "//modules/planning/common/trajectory:discretized_trajectory",
         "//modules/planning/common/trajectory:publishable_trajectory",
+        "//modules/planning/proto:planning_config_proto",
         "//modules/planning/proto:planning_proto",
         "//modules/planning/reference_line:reference_line_provider",
+    ],
+)
+
+cc_test(
+    name = "frame_test",
+    size = "small",
+    srcs = [
+        "frame_test.cc",
+    ],
+    data = [
+        "//modules/planning/common:common_testdata",
+    ],
+    deps = [
+        ":frame",
+        "//modules/common/util",
+        "//modules/planning/proto:planning_config_proto",
+        "@gtest//:main",
     ],
 )
 
@@ -235,7 +286,6 @@ cc_library(
     ],
     deps = [
         "//modules/common/math",
-        "//modules/planning/common/speed:speed_data",
         "//modules/planning/proto:planning_proto",
     ],
 )
@@ -262,6 +312,21 @@ cc_library(
         "//modules/localization/common:localization_common",
         "//modules/localization/proto:localization_proto",
         "@eigen//:eigen",
+    ],
+)
+
+cc_library(
+    name = "planning_thread_pool",
+    srcs = [
+        "planning_thread_pool.cc",
+    ],
+    hdrs = [
+        "planning_thread_pool.h",
+    ],
+    deps = [
+        ":planning_gflags",
+        "//modules/common:macro",
+        "//modules/common/util:ctpl_stl",
     ],
 )
 

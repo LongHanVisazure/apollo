@@ -37,9 +37,7 @@ using apollo::common::time::Clock;
 using apollo::common::util::PathExists;
 using apollo::hdmap::BaseMapFile;
 
-std::string Dreamview::Name() const {
-  return FLAGS_dreamview_module_name;
-}
+std::string Dreamview::Name() const { return FLAGS_dreamview_module_name; }
 
 Status Dreamview::Init() {
   AdapterManager::Init(FLAGS_dreamview_adapter_config_filename);
@@ -64,6 +62,8 @@ Status Dreamview::Init() {
       << "RoutingResponseAdapter is not initialized.";
   CHECK(AdapterManager::GetCompressedImage())
       << "CompressedImageAdapter is not initialized.";
+  CHECK(AdapterManager::GetImageShort())
+      << "ImageShortAdapter is not initialized.";
 
   // Initialize and run the web server which serves the dreamview htmls and
   // javascripts and handles websocket requests.
@@ -91,6 +91,8 @@ Status Dreamview::Init() {
 
   server_->addWebSocketHandler("/websocket", *websocket_);
   server_->addHandler("/image", *image_);
+
+  ApolloApp::SetCallbackThreadNumber(FLAGS_dreamview_worker_num);
 
   return Status::OK();
 }

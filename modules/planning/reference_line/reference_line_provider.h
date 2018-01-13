@@ -74,6 +74,12 @@ class ReferenceLineProvider {
   bool GetReferenceLines(std::list<ReferenceLine>* reference_lines,
                          std::list<hdmap::RouteSegments>* segments);
 
+  double LastTimeDelay();
+
+  std::vector<routing::LaneWaypoint> FutureRouteWaypoints();
+
+  static double LookForwardDistance(const common::VehicleState& state);
+
  private:
   /**
    * @brief Use PncMap to create reference line and the corresponding segments
@@ -84,15 +90,21 @@ class ReferenceLineProvider {
   bool CreateReferenceLine(std::list<ReferenceLine>* reference_lines,
                            std::list<hdmap::RouteSegments>* segments);
 
+  /**
+   * @brief store the computed reference line. This function can avoid
+   * unnecessary copy if the reference lines are the same.
+   */
+  void UpdateReferenceLine(
+      const std::list<ReferenceLine>& reference_lines,
+      const std::list<hdmap::RouteSegments>& route_segments);
+
   void GenerateThread();
   void IsValidReferenceLine();
   void PrioritzeChangeLane(std::list<hdmap::RouteSegments>* route_segments);
-  bool IsAllowChangeLane(const common::math::Vec2d& point,
-                         const std::list<hdmap::RouteSegments>& route_segments);
 
   bool CreateRouteSegments(const common::VehicleState& vehicle_state,
-                           double look_forward_distance,
-                           double look_backward_distance,
+                           const double look_forward_distance,
+                           const double look_backward_distance,
                            std::list<hdmap::RouteSegments>* segments);
 
   bool IsReferenceLineSmoothValid(const ReferenceLine& raw,
@@ -119,6 +131,9 @@ class ReferenceLineProvider {
                            hdmap::RouteSegments* segments,
                            ReferenceLine* reference_line);
 
+  AnchorPoint GetAnchorPoint(const ReferenceLine& reference_line,
+                             double s) const;
+
  private:
   DECLARE_SINGLETON(ReferenceLineProvider);
 
@@ -130,22 +145,19 @@ class ReferenceLineProvider {
   QpSplineReferenceLineSmootherConfig smoother_config_;
 
   std::mutex pnc_map_mutex_;
-  // the following data are managed by pnc_map_mutex_
   std::unique_ptr<hdmap::PncMap> pnc_map_;
+
+  std::mutex vehicle_state_mutex_;
   common::VehicleState vehicle_state_;
+
+  std::mutex routing_mutex_;
+  routing::RoutingResponse routing_;
   bool has_routing_ = false;
-  struct SegmentHistory {
-    double min_l = 0.0;
-    double accumulate_s = 0.0;
-    common::math::Vec2d last_point;
-  };
-  std::unordered_map<std::string, SegmentHistory> segment_history_;
 
   std::mutex reference_lines_mutex_;
-  // the following data are managed by reference_lines_mutex_
-  std::condition_variable cv_has_reference_line_;
   std::list<ReferenceLine> reference_lines_;
   std::list<hdmap::RouteSegments> route_segments_;
+  double last_calculation_time_ = 0.0;
 };
 
 }  // namespace planning

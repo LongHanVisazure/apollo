@@ -31,10 +31,13 @@ namespace drivers {
 namespace conti_radar {
 
 std::string ContiRadarCanbus::Name() const {
-  return FLAGS_hmi_name;
+  return FLAGS_canbus_driver_name;
 }
 
 apollo::common::Status ContiRadarCanbus::Init() {
+  AdapterManager::Init(FLAGS_adapter_config_filename);
+  AINFO << "The adapter manager is successfully initialized.";
+
   if (!::apollo::common::util::GetProtoFromFile(FLAGS_sensor_conf_file,
                                                 &conti_radar_conf_)) {
     return OnError("Unable to load canbus conf file: " +
@@ -70,10 +73,6 @@ apollo::common::Status ContiRadarCanbus::Init() {
   }
   AINFO << "The can receiver is successfully initialized.";
 
-  AdapterManager::Init(FLAGS_adapter_config_filename);
-
-  AINFO << "The adapter manager is successfully initialized.";
-
   return Status::OK();
 }
 
@@ -102,7 +101,7 @@ apollo::common::Status ContiRadarCanbus::Start() {
   AINFO << "Can receiver is started.";
 
   // last step: publish monitor messages
-  apollo::common::monitor::MonitorBuffer buffer(&monitor_);
+  apollo::common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
   buffer.INFO("Canbus is started.");
 
   return Status::OK();
@@ -124,7 +123,7 @@ void ContiRadarCanbus::PublishSensorData() {
 
 // Send the error to monitor and return it
 Status ContiRadarCanbus::OnError(const std::string &error_msg) {
-  apollo::common::monitor::MonitorBuffer buffer(&monitor_);
+  apollo::common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
   buffer.ERROR(error_msg);
   return Status(ErrorCode::CANBUS_ERROR, error_msg);
 }

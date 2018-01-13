@@ -41,7 +41,7 @@ constexpr bool is_zero(T value) {
 
 class Rtcm3Parser : public Parser {
  public:
-  Rtcm3Parser(bool is_base_satation);
+  explicit Rtcm3Parser(bool is_base_satation);
   virtual MessageType get_message(MessagePtr &message_ptr);
 
  private:
@@ -142,9 +142,6 @@ void Rtcm3Parser::fill_keppler_orbit(
   int prn = 0;
   satsys(eph.sat, &prn);
   keppler_orbit.set_sat_prn(prn);
-
-  ROS_INFO_STREAM("Keppler orbit debuginfo:\r\n"
-                  << keppler_orbit.DebugString());
 }
 
 void Rtcm3Parser::fill_glonass_orbit(
@@ -171,9 +168,8 @@ void Rtcm3Parser::fill_glonass_orbit(
   // orbit.set_tk(eph.tof.time + eph.tof.sec);
 
   int week = 0;
-  double second = 0.0;
 
-  second = time2gpst(eph.toe, &week);
+  double second = time2gpst(eph.toe, &week);
   orbit.set_week_num(week);
   orbit.set_week_second_s(second);
   orbit.set_toe(second);
@@ -190,10 +186,7 @@ void Rtcm3Parser::fill_glonass_orbit(
 
 void Rtcm3Parser::set_observation_time() {
   int week = 0;
-  double second = 0.0;
-
-  second = time2gpst(_rtcm.time, &week);
-
+  double second = time2gpst(_rtcm.time, &week);
   _observation.set_gnss_time_type(apollo::drivers::gnss::GPS_TIME);
   _observation.set_gnss_week(week);
   _observation.set_gnss_second_s(second);
@@ -204,9 +197,8 @@ Parser::MessageType Rtcm3Parser::get_message(MessagePtr &message_ptr) {
     return MessageType::NONE;
   }
 
-  int status = 0;
   while (_data < _data_end) {
-    status = input_rtcm3(&_rtcm, *_data++);  // parse data use rtklib
+    const int status = input_rtcm3(&_rtcm, *_data++);  // parse data use rtklib
 
     switch (status) {
       case 1:  // observation data
@@ -325,7 +317,6 @@ bool Rtcm3Parser::process_observation() {
     sat_obs->set_band_obs_num(j);
   }
 
-  ROS_INFO_STREAM("Obeservation debuginfo:\r\n" << _observation.DebugString());
   return true;
 }
 
@@ -361,7 +352,6 @@ bool Rtcm3Parser::process_ephemerides() {
     fill_keppler_orbit(_rtcm.nav.eph[_rtcm.ephsat - 1], *obit);
   }
 
-  ROS_INFO_STREAM("Ephemeris debuginfo:\r\n" << _ephemeris.DebugString());
   return true;
 }
 

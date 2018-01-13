@@ -16,12 +16,11 @@
 
 #include "modules/prediction/evaluator/vehicle/rnn_evaluator.h"
 
-#include <utility>
-#include <vector>
 #include <cmath>
 #include <memory>
 #include <string>
-#include <mutex>
+#include <utility>
+#include <vector>
 
 #include "modules/common/util/file.h"
 #include "modules/prediction/common/prediction_gflags.h"
@@ -40,7 +39,7 @@ void RNNEvaluator::Evaluate(Obstacle* obstacle_ptr) {
 
   int id = obstacle_ptr->id();
   if (!obstacle_ptr->latest_feature().IsInitialized()) {
-    AERROR << "Obstacle [" << id << "] has no latest feature.";
+    ADEBUG << "Obstacle [" << id << "] has no latest feature.";
     return;
   }
 
@@ -56,52 +55,52 @@ void RNNEvaluator::Evaluate(Obstacle* obstacle_ptr) {
       latest_feature_ptr->mutable_lane()->mutable_lane_graph();
   CHECK_NOTNULL(lane_graph_ptr);
   if (lane_graph_ptr->lane_sequence_size() == 0) {
-    AERROR << "Obstacle [" << id << "] has no lane sequences.";
+    ADEBUG << "Obstacle [" << id << "] has no lane sequences.";
     return;
   }
 
   Eigen::MatrixXf obstacle_feature_mat;
   std::unordered_map<int, Eigen::MatrixXf> lane_feature_mats;
-  if (ExtractFeatureValues(obstacle_ptr,
-          &obstacle_feature_mat, &lane_feature_mats) != 0) {
-    AWARN << "Fail to extract feature from obstacle";
+  if (ExtractFeatureValues(obstacle_ptr, &obstacle_feature_mat,
+                           &lane_feature_mats) != 0) {
+    ADEBUG << "Fail to extract feature from obstacle";
     return;
   }
   if (obstacle_feature_mat.rows() != 1 ||
-      obstacle_feature_mat.size() != dim_obstacle_feature_) {
-    AWARN << "Dim of obstacle feature is wrong!";
+      obstacle_feature_mat.size() != DIM_OBSTACLE_FEATURE) {
+    ADEBUG << "Dim of obstacle feature is wrong!";
     return;
   }
 
   Eigen::MatrixXf pred_mat;
   std::vector<Eigen::MatrixXf> states;
-  if (!obstacle_ptr->rnn_enabled()) {
+  if (!obstacle_ptr->RNNEnabled()) {
     obstacle_ptr->InitRNNStates();
   }
   obstacle_ptr->GetRNNStates(&states);
-
   for (int i = 0; i < lane_graph_ptr->lane_sequence_size(); ++i) {
     LaneSequence* lane_sequence_ptr = lane_graph_ptr->mutable_lane_sequence(i);
     int seq_id = lane_sequence_ptr->lane_sequence_id();
-    if (lane_feature_mats.find(seq_id) != lane_feature_mats.end()) {
+    if (lane_feature_mats.find(seq_id) == lane_feature_mats.end()) {
       ADEBUG << "Fail to access seq-" << seq_id << " feature!";
       continue;
     }
     const Eigen::MatrixXf& lane_feature_mat = lane_feature_mats[seq_id];
-    if (lane_feature_mat.cols() != dim_lane_point_feature_) {
-      AWARN << "Lane feature dim of seq-" << seq_id << " is wrong!";
+    if (lane_feature_mat.cols() != DIM_LANE_POINT_FEATURE) {
+      ADEBUG << "Lane feature dim of seq-" << seq_id << " is wrong!";
       continue;
     }
     model_ptr_->SetState(states);
     model_ptr_->Run({obstacle_feature_mat, lane_feature_mat}, &pred_mat);
     double probability = pred_mat(0, 0);
+    ADEBUG << "-------- Probability = " << probability;
     double acceleration = pred_mat(0, 1);
     if (std::isnan(probability) || std::isinf(probability)) {
-      AWARN << "Fail to compute probability.";
+      ADEBUG << "Fail to compute probability.";
       continue;
     }
     if (std::isnan(acceleration) || std::isinf(acceleration)) {
-      AWARN << "Fail to compute acceleration.";
+      ADEBUG << "Fail to compute acceleration.";
       continue;
     }
     lane_sequence_ptr->set_probability(probability);
@@ -118,7 +117,7 @@ void RNNEvaluator::LoadModel(const std::string& model_file) {
   CHECK(common::util::GetProtoFromFile(model_file, &net_parameter))
       << "Unable to load model file: " << model_file << ".";
 
-  AINFO << "Succeeded in loading the model file: " << model_file << ".";
+  ADEBUG << "Succeeded in loading the model file: " << model_file << ".";
   model_ptr_ = network::RnnModel::instance();
   model_ptr_->LoadModel(net_parameter);
 }
@@ -132,8 +131,8 @@ int RNNEvaluator::ExtractFeatureValues(
     ADEBUG << "Reset rnn state";
     obstacle->InitRNNStates();
   }
-  if (static_cast<int>(obstacle_features.size()) != dim_obstacle_feature_) {
-    ADEBUG << "Obstacle feature size: " << obstacle_features.size();
+  if (static_cast<int>(obstacle_features.size()) != DIM_OBSTACLE_FEATURE) {
+    AWARN << "Obstacle feature size: " << obstacle_features.size();
     return -1;
   }
   obstacle_feature_mat->resize(1, obstacle_features.size());
@@ -143,7 +142,7 @@ int RNNEvaluator::ExtractFeatureValues(
 
   Feature* feature = obstacle->mutable_latest_feature();
   if (!feature->has_lane() || !feature->lane().has_lane_graph()) {
-    ADEBUG << "Fail to access lane graph!";
+    AWARN << "Fail to access lane graph!";
     return -1;
   }
   int routes = feature->lane().lane_graph().lane_sequence_size();
@@ -151,10 +150,10 @@ int RNNEvaluator::ExtractFeatureValues(
     LaneSequence lane_seq = feature->lane().lane_graph().lane_sequence(i);
     int seq_id = lane_seq.lane_sequence_id();
     if (SetupLaneFeature(*feature, lane_seq, &lane_features) != 0) {
-      AWARN << "Fail to setup lane sequence feature!";
+      ADEBUG << "Fail to setup lane sequence feature!";
       continue;
     }
-    int dim = dim_lane_point_feature_;
+    int dim = DIM_LANE_POINT_FEATURE;
     Eigen::MatrixXf mat(lane_features.size() / dim, dim);
     for (int j = 0; j < static_cast<int>(lane_features.size()); ++j) {
       mat(j / dim, j % dim) = lane_features[j];
@@ -167,7 +166,7 @@ int RNNEvaluator::ExtractFeatureValues(
 int RNNEvaluator::SetupObstacleFeature(
     Obstacle* obstacle, std::vector<float>* const feature_values) {
   feature_values->clear();
-  feature_values->reserve(dim_obstacle_feature_);
+  feature_values->reserve(DIM_OBSTACLE_FEATURE);
 
   float heading = 0.0;
   float speed = 0.0;
@@ -200,12 +199,13 @@ int RNNEvaluator::SetupObstacleFeature(
     dist_lb = p_lane_fea->dist_to_left_boundary();
     dist_rb = p_lane_fea->dist_to_right_boundary();
 
-    if (!fea->has_speed() || !fea->has_theta()) {
-      ADEBUG << "Fail to access speed from " << i << "-the feature";
+    if (!fea->has_speed() || !fea->velocity_heading()) {
+      ADEBUG << "Fail to access speed and velocity heading from " << i
+             << "-the feature";
       continue;
     }
     speed = fea->speed();
-    heading = fea->theta();
+    heading = fea->velocity_heading();
     success_setup = true;
     ADEBUG << "Success to setup obstacle feature!";
 
@@ -244,12 +244,12 @@ int RNNEvaluator::SetupLaneFeature(const Feature& feature,
                                    const LaneSequence& lane_sequence,
                                    std::vector<float>* const feature_values) {
   feature_values->clear();
-  feature_values->reserve(
-      dim_lane_point_feature_ * length_lane_point_sequence_);
+  feature_values->reserve(static_cast<size_t>(DIM_LANE_POINT_FEATURE) *
+                          static_cast<size_t>(LENGTH_LANE_POINT_SEQUENCE));
   LanePoint* p_lane_point = nullptr;
   int counter = 0;
   for (int seg_i = 0; seg_i < lane_sequence.lane_segment_size(); ++seg_i) {
-    if (counter > length_lane_point_sequence_) {
+    if (counter > LENGTH_LANE_POINT_SEQUENCE) {
       break;
     }
     LaneSegment lane_seg = lane_sequence.lane_segment(seg_i);
@@ -268,19 +268,19 @@ int RNNEvaluator::SetupLaneFeature(const Feature& feature,
       float angle = std::atan2(diff_y, diff_x);
       feature_values->push_back(p_lane_point->heading());
       feature_values->push_back(p_lane_point->angle_diff());
-      feature_values->push_back(
-          p_lane_point->relative_l() - feature.lane().lane_feature().lane_l());
+      feature_values->push_back(p_lane_point->relative_l() -
+                                feature.lane().lane_feature().lane_l());
       feature_values->push_back(angle);
       ++counter;
-      if (counter > length_lane_point_sequence_) {
+      if (counter > LENGTH_LANE_POINT_SEQUENCE) {
         ADEBUG << "Full the lane point sequence";
         break;
       }
     }
   }
   ADEBUG << "Lane sequence feature size: " << counter;
-  if (counter < dim_lane_point_feature_) {
-    ADEBUG << "Fail to setup lane feature!";
+  if (counter < DIM_LANE_POINT_FEATURE) {
+    AWARN << "Fail to setup lane feature!";
     return -1;
   }
   return 0;
@@ -288,12 +288,11 @@ int RNNEvaluator::SetupLaneFeature(const Feature& feature,
 
 bool RNNEvaluator::IsCutinInHistory(const std::string& curr_lane_id,
                                     const std::string& prev_lane_id) {
-  PredictionMap* p_map = PredictionMap::instance();
   std::shared_ptr<const LaneInfo> curr_lane_info =
-      p_map->LaneById(curr_lane_id);
+      PredictionMap::LaneById(curr_lane_id);
   std::shared_ptr<const LaneInfo> prev_lane_info =
-      p_map->LaneById(prev_lane_id);
-  if (!p_map->IsSuccessorLane(curr_lane_info, prev_lane_info)) {
+      PredictionMap::LaneById(prev_lane_id);
+  if (!PredictionMap::IsSuccessorLane(curr_lane_info, prev_lane_info)) {
     return true;
   }
   return false;

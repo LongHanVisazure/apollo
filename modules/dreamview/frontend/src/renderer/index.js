@@ -27,7 +27,7 @@ class Renderer {
             antialias: useAntialias
         });
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x14171A);
+        this.scene.background = new THREE.Color(0x000C17);
 
         // The dimension of the scene
         this.dimension = {
@@ -36,7 +36,8 @@ class Renderer {
         };
 
         // The ground.
-        this.ground = PARAMETERS.ground.type === 'tile' ? new TileGround() : new Ground();
+        this.ground = (PARAMETERS.ground.type === 'tile' || OFFLINE_PLAYBACK)
+                      ? new TileGround() : new Ground();
 
         // The map.
         this.map = new Map();
@@ -251,8 +252,10 @@ class Renderer {
                                                                    false);
     }
 
-    addDefaultEndPoint(point) {
-        this.routingEditor.addRoutingPoint(point, this.coordinates, this.scene);
+    addDefaultEndPoint(points) {
+        for (let i = 0; i < points.length; i++) {
+            this.routingEditor.addRoutingPoint(points[i], this.coordinates, this.scene);
+        }
     }
 
     removeAllRoutingPoints() {
@@ -360,6 +363,10 @@ class Renderer {
     }
 
     getGeolocation(event) {
+        if (!this.coordinates.isInitialized()) {
+            return;
+        }
+
         const canvasPosition = event.currentTarget.getBoundingClientRect();
 
         const vector = new THREE.Vector3(
