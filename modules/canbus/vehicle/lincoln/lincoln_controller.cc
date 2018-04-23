@@ -54,7 +54,8 @@ ErrorCode LincolnController::Init(
     AINFO << "LincolnController has already been initiated.";
     return ErrorCode::CANBUS_ERROR;
   }
-
+  vehicle_params_.CopyFrom(
+      common::VehicleConfigHelper::instance()->GetConfig().vehicle_param());
   params_.CopyFrom(params);
   if (!params_.has_driving_mode()) {
     AERROR << "Vehicle conf pb not set driving_mode.";
@@ -174,7 +175,13 @@ Chassis LincolnController::chassis() {
     chassis_.set_speed_mps(0);
   }
   // 6
-  chassis_.set_odometer_m(0);
+  if (chassis_detail.has_basic() && chassis_detail.basic().has_odo_meter()) {
+    // odo_meter is in km
+    chassis_.set_odometer_m(chassis_detail.basic().odo_meter() * 1000);
+  } else {
+    chassis_.set_odometer_m(0);
+  }
+
   // 7
   // lincoln only has fuel percentage
   // to avoid confusing, just don't set
@@ -307,7 +314,6 @@ Chassis LincolnController::chassis() {
 
   // give engage_advice based on error_code and canbus feedback
   if (!chassis_error_mask_ && !chassis_.parking_brake() &&
-      (chassis_.steering_percentage() != 0.0) &&
       (chassis_.throttle_percentage() != 0.0) &&
       (chassis_.brake_percentage() != 0.0)) {
     chassis_.mutable_engage_advice()->set_advice(
